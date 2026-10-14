@@ -1,0 +1,367 @@
+import PDFDocument from 'pdfkit'
+
+/**
+ * Mise en page des documents du salon : proforma et reçu.
+ *
+ * Un seul gabarit pour les deux — même bandeau, même tableau, même pied.
+ * Seuls le titre, la mention d'avertissement et le bloc financier changent.
+ * Deux documents qui se ressemblent se lisent plus vite qu'un document
+ * inventé pour chaque cas.
+ *
+ * Les polices sont celles intégrées au format PDF (Helvetica) : aucun
+ * fichier à déployer, et l'encodage WinAnsi couvre les accents français.
+ */
+
+const BRUN = '#58301a'
+const BRUN_CLAIR = '#7c4527'
+const OR = '#c2a25e'
+const ENCRE = '#3a2113'
+const GRIS = '#8b7a6d'
+const LIGNE = '#e6dcd1'
+
+const MARGE = 48
+
+/**
+ * « 20 000 FCFA ».
+ *
+ * `Intl` sépare les milliers par une espace fine insécable (U+202F). Les
+ * polices intégrées au PDF ne connaissent pas ce caractère et l'impriment en
+ * barre oblique : « 20/000 FCFA ». On le ramène donc à une espace ordinaire —
+ * c'est le seul endroit où ce remplacement est nécessaire, et l'oublier se
+ * voit immédiatement sur le reçu.
+ */
+const formatMoney = (value, currency = 'FCFA') => {
+  const nombre = new Intl.NumberFormat('fr-FR')
+    .format(Math.round(Number(value ?? 0)))
+    .replace(/[  ]/g, ' ')
+  return `${nombre} ${currency}`
+}
+
+const formatDate = (value) => {
+  if (!value) return '—'
+  const text = String(value)
+  const match = text.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (match) return `${match[3]}/${match[2]}/${match[1]}`
+  const date = new Date(text)
+  return Number.isNaN(date.getTime()) ? '—' : date.toLocaleDateString('fr-FR')
+}
+
+const formatDateTime = (value) => {
+  if (!value) return '—'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '—'
+  return `${date.toLocaleDateString('fr-FR')} à ${date.toLocaleTimeString('fr-FR', {
+    hour: '2-digit',
+    minute: '2-digit',
+  })}`
+}
+
+const formatDuration = (minutes) => {
+  if (!minutes) return '—'
+  const hours = Math.floor(minutes / 60)
+  const rest = minutes % 60
+  if (!hours) return `${rest} min`
+  if (!rest) return `${hours} h`
+  return `${hours} h ${String(rest).padStart(2, '0')}`
+}
+
+const REDUCTION_LABELS = {
+  loyalty: 'Fidélité',
+  relationship: 'Relation client',
+  gesture: 'Geste commercial',
+  partnership: 'Partenariat',
+  other: 'Autre',
+}
+
+/* ───────────────────────────── Briques ──────────────────────────────── */
+
+function bandeau(doc, snapshot, titre, numero) {
+  const { salon } = snapshot
+  doc.rect(0, 0, doc.page.width, 108).fill(BRUN)
+
+  doc
+    .fillColor('#faf7f3')
+    .font('Helvetica-Bold')
+    .fontSize(19)
+    .text(salon.name || 'Beauté Halal', MARGE, 30, { width: 300 })
+
+  if (salon.specialty) {
+    doc.font('Helvetica').fontSize(8.5).fillColor(OR).text(salon.specialty, MARGE, 54, { width: 300 })
+  }
+
+  const coordonnees = [salon.address, salon.phone, salon.email].filter(Boolean).join('  ·  ')
+  if (coordonnees) {
+    doc
+      .font('Helvetica')
+      .fontSize(7.5)
+      .fillColor('#e8dccb')
+      .text(coordonnees, MARGE, 72, { width: 320 })
+  }
+
+  const droite = doc.page.width - MARGE - 190
+  doc
+    .font('Helvetica-Bold')
+    .fontSize(15)
+    .fillColor('#faf7f3')
+    .text(titre.toUpperCase(), droite, 32, { width: 190, align: 'right' })
+  doc
+    .font('Helvetica')
+    .fontSize(10)
+    .fillColor(OR)
+    .text(numero, droite, 54, { width: 190, align: 'right' })
+  doc
+    .fontSize(7.5)
+    .fillColor('#e8dccb')
+    .text(`Établi le ${formatDateTime(snapshot.issuedAt)}`, droite, 72, {
+      width: 190,
+      align: 'right',
+    })
+
+  doc.y = 132
+}
+
+function titreSection(doc, texte) {
+  doc
+    .font('Helvetica-Bold')
+    .fontSize(8)
+    .fillColor(BRUN_CLAIR)
+    .text(texte.toUpperCase(), MARGE, doc.y, { characterSpacing: 1 })
+  doc.moveDown(0.45)
+}
+
+/** Deux colonnes de « libellé : valeur ». */
+function grille(doc, paires) {
+  const utile = doc.page.width - MARGE * 2
+  const colonne = utile / 2
+  const depart = doc.y
+  let hauteurMax = 0
+
+  paires.forEach(([libelle, valeur], index) => {
+    const x = MARGE + (index % 2) * colonne
+    const y = depart + Math.floor(index / 2) * 30
+    doc.font('Helvetica').fontSize(7.5).fillColor(GRIS).text(libelle, x, y, { width: colonne - 14 })
+    doc
+      .font('Helvetica')
+      .fontSize(9.5)
+      .fillColor(ENCRE)
+      .text(valeur ?? '—', x, y + 11, { width: colonne - 14 })
+    hauteurMax = Math.max(hauteurMax, y + 30)
+  })
+
+  doc.y = hauteurMax + 8
+}
+
+function filet(doc) {
+  doc
+    .moveTo(MARGE, doc.y)
+    .lineTo(doc.page.width - MARGE, doc.y)
+    .lineWidth(0.6)
+    .strokeColor(LIGNE)
+    .stroke()
+  doc.y += 14
+}
+
+/** Le bloc de montants, aligné à droite — c'est ce que la cliente regarde. */
+function comptes(doc, snapshot, { avecVersements }) {
+  const { totals } = snapshot
+  const devise = totals.currency
+  const largeur = 238
+  const x = doc.page.width - MARGE - largeur
+  let y = doc.y
+
+  const ligne = (libelle, valeur, { gras = false, couleur = ENCRE, taille = 9.5 } = {}) => {
+    doc
+      .font(gras ? 'Helvetica-Bold' : 'Helvetica')
+      .fontSize(taille)
+      .fillColor(gras ? couleur : GRIS)
+      .text(libelle, x, y, { width: largeur - 108 })
+    doc
+      .font(gras ? 'Helvetica-Bold' : 'Helvetica')
+      .fontSize(taille)
+      .fillColor(couleur)
+      .text(valeur, x + largeur - 108, y, { width: 108, align: 'right' })
+    y += gras ? 19 : 16
+  }
+
+  ligne('Montant de la prestation', formatMoney(totals.total, devise))
+
+  if (totals.discount > 0) {
+    const motif = REDUCTION_LABELS[snapshot.discount?.reason] ?? null
+    ligne(motif ? `Réduction (${motif})` : 'Réduction', `- ${formatMoney(totals.discount, devise)}`)
+  }
+
+  doc.moveTo(x, y + 2).lineTo(x + largeur, y + 2).lineWidth(0.6).strokeColor(LIGNE).stroke()
+  y += 10
+
+  ligne('Montant à payer', formatMoney(totals.payable, devise), { gras: true, taille: 11 })
+
+  if (avecVersements) {
+    ligne('Montant payé', formatMoney(totals.paid, devise))
+    ligne('Reste à payer', formatMoney(totals.balance, devise), {
+      gras: true,
+      couleur: totals.balance > 0 ? '#b4342a' : '#3f6b45',
+    })
+    ligne('Mode de paiement', 'Espèces')
+  }
+
+  doc.y = y + 8
+}
+
+/** Le détail des versements — indispensable dès qu'il y en a plusieurs. */
+function tableauVersements(doc, snapshot) {
+  if (!snapshot.payments?.length) return
+
+  titreSection(doc, 'Versements enregistrés')
+
+  const utile = doc.page.width - MARGE * 2
+  const colonnes = [
+    { titre: 'Date', largeur: utile * 0.28 },
+    { titre: 'Enregistré par', largeur: utile * 0.38 },
+    { titre: 'Mode', largeur: utile * 0.14 },
+    { titre: 'Montant', largeur: utile * 0.2, align: 'right' },
+  ]
+
+  let y = doc.y
+  doc.rect(MARGE, y - 3, utile, 18).fill('#f6f1ea')
+  let x = MARGE + 6
+  colonnes.forEach((colonne) => {
+    doc
+      .font('Helvetica-Bold')
+      .fontSize(7.5)
+      .fillColor(BRUN_CLAIR)
+      .text(colonne.titre, x, y + 2, { width: colonne.largeur - 12, align: colonne.align })
+    x += colonne.largeur
+  })
+  y += 21
+
+  snapshot.payments.forEach((versement) => {
+    const valeurs = [
+      formatDateTime(versement.createdAt),
+      versement.recordedBy || '—',
+      versement.method === 'cash' ? 'Espèces' : versement.method,
+      formatMoney(versement.amount, snapshot.totals.currency),
+    ]
+    x = MARGE + 6
+    colonnes.forEach((colonne, index) => {
+      doc
+        .font('Helvetica')
+        .fontSize(8.5)
+        .fillColor(ENCRE)
+        .text(valeurs[index], x, y, { width: colonne.largeur - 12, align: colonne.align })
+      x += colonne.largeur
+    })
+    y += 17
+  })
+
+  doc.y = y + 14
+}
+
+function pied(doc, snapshot, mention) {
+  const y = doc.page.height - 74
+  doc.moveTo(MARGE, y).lineTo(doc.page.width - MARGE, y).lineWidth(0.6).strokeColor(LIGNE).stroke()
+  doc
+    .font('Helvetica')
+    .fontSize(7.5)
+    .fillColor(GRIS)
+    .text(mention, MARGE, y + 10, { width: doc.page.width - MARGE * 2, align: 'center' })
+  doc
+    .fontSize(7)
+    .fillColor(OR)
+    .text(snapshot.salon.name || 'Beauté Halal', MARGE, y + 34, {
+      width: doc.page.width - MARGE * 2,
+      align: 'center',
+    })
+}
+
+/* ──────────────────────────── Documents ─────────────────────────────── */
+
+/**
+ * Construit le PDF et le renvoie en mémoire. Les documents tiennent sur une
+ * page : les assembler en mémoire évite de gérer un fichier temporaire, et
+ * la réponse part d'un seul bloc.
+ */
+export function renderDocument(snapshot, { numero }) {
+  const recu = snapshot.kind === 'receipt'
+
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ size: 'A4', margin: MARGE, bufferPages: true })
+    const morceaux = []
+    doc.on('data', (morceau) => morceaux.push(morceau))
+    doc.on('end', () => resolve(Buffer.concat(morceaux)))
+    doc.on('error', reject)
+
+    bandeau(doc, snapshot, recu ? 'Reçu' : 'Proforma', numero)
+
+    /* ── Cliente et rendez-vous ── */
+    titreSection(doc, 'Cliente')
+    grille(doc, [
+      ['Nom', `${snapshot.customer.firstName} ${snapshot.customer.lastName}`],
+      ['Téléphone', snapshot.customer.phone],
+      ['E-mail', snapshot.customer.email],
+      ['Référence du rendez-vous', snapshot.appointment.reference],
+    ])
+    filet(doc)
+
+    titreSection(doc, 'Prestation')
+    grille(doc, [
+      ['Date', formatDate(snapshot.appointment.date)],
+      ['Heure', snapshot.appointment.time],
+      ['Service', snapshot.appointment.serviceName],
+      ['Coiffure', snapshot.appointment.hairstyle || '—'],
+      ['Durée', formatDuration(snapshot.appointment.durationMinutes)],
+      [
+        'Tarif',
+        formatMoney(snapshot.totals.total, snapshot.totals.currency),
+      ],
+    ])
+    filet(doc)
+
+    /*
+     * Deux personnes, deux lignes, jamais la même.
+     *   – l'agent a réalisé la coiffure ;
+     *   – l'utilisateur de validation a enregistré l'opération au dashboard.
+     * Les confondre fausserait aussi bien le suivi du salon que la paie.
+     */
+    titreSection(doc, 'Prise en charge')
+    grille(doc, [
+      ['Salon / bureau', snapshot.office ? `${snapshot.office.number} — ${snapshot.office.name}` : '—'],
+      ['Agent / coiffeuse', snapshot.agent?.name || 'Non attribué'],
+      ['Validation enregistrée par', snapshot.handledBy?.name || '—'],
+      ['Date de validation', snapshot.handledBy?.at ? formatDateTime(snapshot.handledBy.at) : '—'],
+      ...(recu && snapshot.completedBy
+        ? [
+            ['Prestation clôturée par', snapshot.completedBy.name],
+            ['Clôturée le', formatDateTime(snapshot.completedBy.at)],
+          ]
+        : []),
+    ])
+    filet(doc)
+
+    /* ── Argent ── */
+    if (recu) tableauVersements(doc, snapshot)
+    comptes(doc, snapshot, { avecVersements: recu })
+
+    if (snapshot.discount?.amount > 0 && snapshot.discount.note) {
+      doc
+        .font('Helvetica-Oblique')
+        .fontSize(7.5)
+        .fillColor(GRIS)
+        .text(`Motif de la réduction : ${snapshot.discount.note}`, MARGE, doc.y, {
+          width: doc.page.width - MARGE * 2,
+        })
+      doc.moveDown(0.6)
+    }
+
+    pied(
+      doc,
+      snapshot,
+      recu
+        ? 'Reçu de paiement — document à conserver. Merci de votre confiance.'
+        : 'Proforma — estimation avant prestation. Ce document ne vaut pas reçu de paiement.',
+    )
+
+    doc.end()
+  })
+}
+
+export default renderDocument

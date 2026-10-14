@@ -1,0 +1,11 @@
+# DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION BEGIN
+PassengerAppRoot "/home/capbvkkqah/backend-beaute-halal"
+PassengerBaseURI "/"
+PassengerNodejs "/home/capbvkkqah/nodevenv/backend-beaute-halal/22/bin/node"
+PassengerAppType node
+PassengerStartupFile src/server.js
+# DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION END
+# DO NOT REMOVE OR MODIFY. CLOUDLINUX ENV VARS CONFIGURATION BEGIN
+<IfModule Litespeed>
+</IfModule>
+# DO NOT REMOVE OR MODIFY. CLOUDLINUX ENV VARS CONFIGURATION END

@@ -1,0 +1,54 @@
+import { unlink } from 'node:fs/promises'
+
+import { Router } from 'express'
+import { z } from 'zod'
+
+import { ApiError } from '../../lib/ApiError.js'
+import { sendCreated, sendNoContent } from '../../lib/http.js'
+import { absoluteUrl } from '../../lib/url.js'
+import { publicUploadPath, uploadAbsolutePath, uploadImage } from '../../middleware/upload.js'
+import { validate } from '../../middleware/validate.js'
+
+export const adminRouter = Router()
+
+/**
+ * Dépôt d'une image (champ « image », multipart/form-data).
+ * Renvoie le chemin à enregistrer dans image_url (ex. « /uploads/xxx.jpg »)
+ * ainsi que l'URL complète pour l'aperçu immédiat.
+ */
+adminRouter.post('/uploads', (request, response, next) => {
+  uploadImage(request, response, (error) => {
+    if (error) return next(error)
+    if (!request.file) return next(ApiError.badRequest('Aucun fichier reçu (champ « image »).'))
+
+    const path = publicUploadPath(request.file.filename)
+    return sendCreated(response, {
+      path,
+      url: absoluteUrl(path),
+      filename: request.file.filename,
+      size: request.file.size,
+      mimeType: request.file.mimetype,
+    })
+  })
+})
+
+adminRouter.delete(
+  '/uploads/:filename',
+  validate({
+    params: z.object({
+      filename: z
+        .string()
+        .regex(/^[A-Za-z0-9._-]+$/, 'Nom de fichier invalide.')
+        .max(200),
+    }),
+  }),
+  async (request, response) => {
+    try {
+      await unlink(uploadAbsolutePath(request.params.filename))
+    } catch (error) {
+      if (error.code === 'ENOENT') throw ApiError.notFound('Ce fichier n’existe pas.')
+      throw error
+    }
+    return sendNoContent(response)
+  },
+)

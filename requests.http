@@ -1,0 +1,185 @@
+### Requêtes prêtes à l'emploi
+### VS Code : installez l'extension « REST Client » puis cliquez sur « Send Request ».
+
+@base = http://localhost:4000/api
+@email = admin@beaute-halal.local
+@password = ChangeMoi2026!
+
+### Santé de l'API
+GET {{base}}/health
+
+### Informations du salon
+GET {{base}}/salon
+
+### Toutes les prestations
+GET {{base}}/services
+
+### Prestations mises en avant (page d'accueil)
+GET {{base}}/services?featured=true
+
+### Prestations d'une catégorie
+GET {{base}}/services?category=entretien
+
+### Une prestation
+GET {{base}}/services/retwist
+
+### Galerie
+GET {{base}}/gallery
+
+### Galerie filtrée
+GET {{base}}/gallery?category=coloration
+
+### Équipe
+GET {{base}}/team
+
+### Avis
+GET {{base}}/testimonials
+
+### Calendrier des 60 prochains jours
+GET {{base}}/availability/days
+
+### Créneaux d'une journée (adaptez la date)
+GET {{base}}/availability/slots?date=2026-09-16
+
+### Créer un rendez-vous (adaptez date et heure à un créneau libre)
+POST {{base}}/appointments
+Content-Type: application/json
+
+{
+  "serviceSlug": "retwist",
+  "date": "2026-09-16",
+  "time": "10:00",
+  "firstName": "Awa",
+  "lastName": "Traoré",
+  "phone": "+225 00 00 00 00",
+  "email": "awa@exemple.com",
+  "note": "Longueur mi-dos"
+}
+
+### Consulter un rendez-vous par sa référence
+GET {{base}}/appointments/BH-XXXXXX
+
+### Envoyer un message de contact
+POST {{base}}/contact
+Content-Type: application/json
+
+{
+  "name": "Awa Traoré",
+  "email": "awa@exemple.com",
+  "phone": "+225 00 00 00 00",
+  "message": "Bonjour, je souhaite un renseignement sur le retwist."
+}
+
+### ───────────────────────── ADMIN ─────────────────────────
+
+### Connexion (copiez le token dans @token ci-dessous)
+# @name login
+POST {{base}}/admin/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}"
+}
+
+@token = {{login.response.body.data.token}}
+
+### Mon compte
+GET {{base}}/admin/auth/me
+Authorization: Bearer {{token}}
+
+### Compteurs du tableau de bord
+GET {{base}}/admin/stats
+Authorization: Bearer {{token}}
+
+### Liste des rendez-vous
+GET {{base}}/admin/appointments
+Authorization: Bearer {{token}}
+
+### Rendez-vous en attente
+GET {{base}}/admin/appointments?status=pending
+Authorization: Bearer {{token}}
+
+### Confirmer un rendez-vous
+PATCH {{base}}/admin/appointments/1/status
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "status": "confirmed" }
+
+### Annuler un rendez-vous
+PATCH {{base}}/admin/appointments/1/status
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "status": "cancelled", "cancelReason": "Indisponibilité du salon" }
+
+### Créer une prestation
+POST {{base}}/admin/services
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "categoryId": 2,
+  "name": "Retwist express",
+  "description": "Reprise rapide des racines.",
+  "durationMinutes": 75,
+  "price": 15000,
+  "isFeatured": false
+}
+
+### Modifier le tarif d'une prestation
+PATCH {{base}}/admin/services/3
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "price": 22000 }
+
+### Modifier les informations du salon
+PUT {{base}}/admin/salon
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "phone_display": "+225 07 00 00 00 00",
+  "whatsapp_number": "2250700000000",
+  "address_city": "Abidjan"
+}
+
+### Modifier les horaires
+PUT {{base}}/admin/opening-hours
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "hours": [
+    { "weekday": 0, "isClosed": true },
+    { "weekday": 1, "isClosed": true },
+    { "weekday": 2, "isClosed": false, "opensAt": "09:00", "closesAt": "18:00" },
+    { "weekday": 3, "isClosed": false, "opensAt": "09:00", "closesAt": "18:00" },
+    { "weekday": 4, "isClosed": false, "opensAt": "09:00", "closesAt": "18:00" },
+    { "weekday": 5, "isClosed": false, "opensAt": "09:00", "closesAt": "18:00" },
+    { "weekday": 6, "isClosed": false, "opensAt": "09:00", "closesAt": "19:00" }
+  ]
+}
+
+### Ajouter une fermeture exceptionnelle
+POST {{base}}/admin/closures
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "date": "2026-12-25", "reason": "Congés" }
+
+### Messages de contact non lus
+GET {{base}}/admin/messages?status=new
+Authorization: Bearer {{token}}
+
+### Changer son mot de passe
+POST {{base}}/admin/auth/change-password
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "currentPassword": "ChangeMoi2026!",
+  "newPassword": "un-mot-de-passe-bien-plus-long"
+}
