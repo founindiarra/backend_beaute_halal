@@ -1,0 +1,266 @@
+[
+  {
+    "slug": "locks-longues-degrade",
+    "title": "Locks longues dégradé miel",
+    "description": "Locks longues avec un dégradé miel vers les pointes : une coloration chaude qui met en valeur la longueur.",
+    "type": "traditionnels",
+    "featured": true,
+    "position": 1
+  },
+  {
+    "slug": "locks-perles",
+    "title": "Locks traditionnelles et perles",
+    "description": "Locks traditionnelles ornées de perles et d’anneaux dorés, pour une touche personnelle.",
+    "type": "traditionnels",
+    "featured": true,
+    "position": 2
+  },
+  {
+    "slug": "small-locks-carre",
+    "title": "Micro locks 0,4 cm, coupe carré",
+    "description": "Micro locks de 0,4 cm coupées en carré, légères et faciles à coiffer au quotidien.",
+    "type": "micro",
+    "featured": true,
+    "position": 3
+  },
+  {
+    "slug": "micro-locks-cuivre",
+    "title": "Micro-locks dégradé cuivré",
+    "description": "Micro-locks longues aux reflets cuivrés, souples et bien réparties sur toute la tête.",
+    "type": "micro",
+    "featured": true,
+    "position": 4
+  },
+  {
+    "slug": "locks-degrade-miel",
+    "title": "Locks dégradé ambré",
+    "description": "Locks traditionnelles avec dégradé ambré : du noir profond à l’or en pointes.",
+    "type": "traditionnels",
+    "featured": true,
+    "position": 5
+  },
+  {
+    "slug": "micro-locks-longues",
+    "title": "Micro-locks mi-longues",
+    "description": "Micro-locks longues et fines, racines nettes et réparties avec précision.",
+    "type": "micro",
+    "featured": true,
+    "position": 6
+  },
+  {
+    "slug": "small-locks-racines",
+    "title": "Small locks racines nettes",
+    "description": "Small locks aux racines nettes et au tracé régulier, signature du salon.",
+    "type": "small",
+    "featured": true,
+    "position": 7
+  },
+  {
+    "slug": "twists-degrade",
+    "title": "Twists dégradé miel",
+    "description": "Twists très fournies avec dégradé miel : un volume important et une belle densité.",
+    "type": "micro",
+    "featured": true,
+    "position": 8
+  },
+  {
+    "slug": "locks-mi-longues",
+    "title": "Small locks 0,8 cm mi-longues, méthode interlocking",
+    "description": "Small locks de 0,8 cm posées en interlocking, à hauteur d’épaules, après presque deux ans de locks.",
+    "type": "small",
+    "featured": false,
+    "position": 9
+  },
+  {
+    "slug": "small-locks-profil",
+    "title": "Small locks de profil",
+    "description": "Small locks de profil, fines et légères, avec une base propre.",
+    "type": "small",
+    "featured": false,
+    "position": 10
+  },
+  {
+    "slug": "micro-locks-boucles",
+    "title": "Micro-locks et boucles",
+    "description": "Micro-locks et boucles naturelles : un beau volume, une texture vivante.",
+    "type": "micro",
+    "featured": false,
+    "position": 11
+  },
+  {
+    "slug": "locks-courtes-noires",
+    "title": "Locks courtes noires, taille 1 cm",
+    "description": "Locks courtes noires de 1 cm de diamètre, entretien simple et allure nette.",
+    "type": "traditionnels",
+    "featured": false,
+    "position": 12
+  },
+  {
+    "slug": "small-locks-chignon",
+    "title": "Small locks en chignon",
+    "description": "Small locks relevées en chignon : une coiffure pratique qui laisse voir les racines.",
+    "type": "small",
+    "featured": false,
+    "position": 13
+  },
+  {
+    "slug": "locks-chignon-pince",
+    "title": "Locks longues, racines nettes",
+    "description": "Locks longues tenues par une pince, racines nettes et parting soigné.",
+    "type": "traditionnels",
+    "featured": false,
+    "position": 14
+  },
+  {
+    "slug": "bantu-knots",
+    "title": "Installation micro-locks 0,4 cm, teinte ginger",
+    "description": "Installation de micro-locks de 0,4 cm, dans une teinte ginger (orange cuivré).",
+    "type": "micro",
+    "featured": false,
+    "position": 15
+  },
+  {
+    "slug": "small-locks-pointe",
+    "title": "Locks noires, taille 1 cm, carré dégradé",
+    "description": "Locks noires de 1 cm de taille, en carré dégradé, avec une pointe fine et légère.",
+    "type": "traditionnels",
+    "featured": false,
+    "position": 16
+  },
+  {
+    "slug": "small-locks-pince",
+    "title": "Micro locks 0,4 cm, mise en place",
+    "description": "Micro locks de 0,4 cm tenues par une pince, mise en place avant la finition.",
+    "type": "micro",
+    "featured": false,
+    "position": 17
+  },
+  {
+    "slug": "micro-braids-depart",
+    "title": "Départ de micro-locks, méthode microbraid, taille 0,2 cm",
+    "description": "Départ de micro-locks de 0,2 cm par la méthode microbraid : la base d’une chevelure fine et régulière.",
+    "type": "micro",
+    "featured": false,
+    "position": 18
+  },
+  {
+    "slug": "resserrage-en-cours",
+    "title": "Resserrage en cours",
+    "description": "Resserrage en cours au salon : racines reprises mèche par mèche.",
+    "type": "small",
+    "featured": false,
+    "position": 19
+  },
+  {
+    "slug": "small-locks-vue-dessus",
+    "title": "Small locks, vue de dessus",
+    "description": "Small locks vues de dessus : la répartition des racines, régulière et nette.",
+    "type": "small",
+    "featured": false,
+    "position": 20
+  },
+  {
+    "slug": "small-locks-dessus-net",
+    "title": "Small locks, méthode crochet broderie",
+    "description": "Small locks installés par la méthode crochet broderie : des racines nettes, vues de dessus.",
+    "type": "small",
+    "featured": false,
+    "position": 21
+  },
+  {
+    "slug": "small-locks-racines-claires",
+    "title": "Small locks, méthode instantanée",
+    "description": "Small locks installés par la méthode instantanée : une finition naturelle, racines bien dégagées.",
+    "type": "small",
+    "featured": false,
+    "position": 22
+  },
+  {
+    "slug": "small-locks-depart",
+    "title": "Small locks, séparation des racines",
+    "description": "Small locks, séparation des racines : un tracé précis, signature du salon.",
+    "type": "small",
+    "featured": false,
+    "position": 23
+  },
+  {
+    "slug": "micro-locks-courtes-boucles",
+    "title": "Small locks, installation méthode interlocking",
+    "description": "Installation de small locks par la méthode interlocking : un volume léger, facile à porter.",
+    "type": "small",
+    "featured": false,
+    "position": 24
+  },
+  {
+    "slug": "bantu-knots-noirs",
+    "title": "Small locks, installation faite il y a 6 mois, méthode interlocking",
+    "description": "Small locks installés il y a 6 mois par la méthode interlocking.",
+    "type": "small",
+    "featured": false,
+    "position": 25
+  },
+  {
+    "slug": "micro-locks-pose",
+    "title": "Small locks, installation faite il y a 6 mois, méthode interlocking",
+    "description": "Même cliente, autre angle : small locks installés il y a 6 mois par la méthode interlocking.",
+    "type": "small",
+    "featured": false,
+    "position": 26
+  },
+  {
+    "slug": "micro-locks-raie-centrale",
+    "title": "Micro-locks, raie centrale",
+    "description": "Micro-locks avec raie centrale : une chevelure compacte et ordonnée.",
+    "type": "micro",
+    "featured": false,
+    "position": 27
+  },
+  {
+    "slug": "micro-locks-finition",
+    "title": "Micro-locks, finition soignée",
+    "description": "Micro-locks courtes, finition soignée : une allure nette, à hauteur d’oreilles.",
+    "type": "micro",
+    "featured": false,
+    "position": 28
+  },
+  {
+    "slug": "micro-locks-microbraids-frises",
+    "title": "Micro-locks, méthode microbraids, cheveux frisés",
+    "description": "Micro-locks posées par la méthode microbraids sur cheveux frisés : fines, légères et régulières.",
+    "type": "micro",
+    "featured": false,
+    "position": 29
+  },
+  {
+    "slug": "micro-locks-frises-profil",
+    "title": "Micro-locks sur cheveux frisés",
+    "description": "Micro-locks sur cheveux frisés, vues de profil : un tracé net et un volume léger.",
+    "type": "micro",
+    "featured": false,
+    "position": 30
+  },
+  {
+    "slug": "micro-locks-crepus-chignon",
+    "title": "Micro-locks sur cheveux crépus",
+    "description": "Micro-locks sur cheveux crépus, attachées en chignon : fines, souples et faciles à coiffer.",
+    "type": "micro",
+    "featured": false,
+    "position": 31
+  },
+  {
+    "slug": "micro-locks-frises-nattes",
+    "title": "Micro-locks sur cheveux frisés",
+    "description": "Micro-locks sur cheveux frisés, vues de dos : une base propre et bien répartie.",
+    "type": "micro",
+    "featured": false,
+    "position": 32
+  },
+  {
+    "slug": "micro-locks-crepus-dessus",
+    "title": "Micro-locks sur cheveux crépus",
+    "description": "Micro-locks sur cheveux crépus, vues du dessus : une raie nette et des racines soignées.",
+    "type": "micro",
+    "featured": false,
+    "position": 33
+  }
+]
