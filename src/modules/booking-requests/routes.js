@@ -39,6 +39,7 @@ import { upsertFromAppointment } from '../customers/model.js'
 import { issueProforma } from '../documents/routes.js'
 import { METHODE_IDS, libelleMethode } from './methodes.js'
 import { RAISONS, avecVerrouCreneau, confirmerRendezVous, creneauChoisi, decider, tracer, A_REGULARISER } from './autoConfirm.js'
+import { logEvent } from '../operations/model.js'
 import { whatsappProvider } from '../../lib/whatsapp.js'
 import { EVENEMENT_PAR_STATUT_DEMANDE, envoyerEmailStatut, envoyerRecapPaiement, notifierDemande, notifierDemandeTousCanaux } from '../messaging/notifications.js'
 import { estimate, findFormule, findType, findVolume, getCatalogue } from '../tarifs/catalogue.js'
@@ -166,8 +167,8 @@ const formatDay = (iso) => {
 }
 
 /** Texte lisible par le salon (e-mail, page « Messages » du dashboard). */
-function buildMessage({ reference, c, besoin, methode, type, volume, formule, delai, etat, longueur, est, reparation, soloConsultation = false, avecPrestation = false, serviceDate = null, serviceTime = null }) {
-  const lines = [`DEMANDE DE RENDEZ-VOUS ${reference} (site v3)`]
+function buildMessage({ reference, c, besoin, methode, type, volume, formule, delai, etat, longueur, est, reparation, soloConsultation = false, avecPrestation = false, serviceDate = null, serviceTime = null, comptoir = false }) {
+  const lines = [`DEMANDE DE RENDEZ-VOUS ${reference} (${comptoir ? 'prise au comptoir, sans paiement d’avance' : 'site v3'})`]
   if (soloConsultation && avecPrestation) lines.push('Demande : CONSULTATION CAPILLAIRE, puis PRESTATION SOUHAITÉE (le même jour à une autre heure, ou un autre jour)')
   if (soloConsultation && (c.consultation?.mode === 'telephone' || c.consultation?.mode === 'whatsapp')) lines.push('À FAIRE : recontacter la cliente pour fixer le jour et l’heure de la consultation.')
   if (soloConsultation && !avecPrestation) {
@@ -253,7 +254,7 @@ function annoncerConfirmation({ maj, frais, rdvId, date, time, price, user }) {
  * Appelée à l'enregistrement (cliente connue) ou une fois le paiement confirmé (nouvelle cliente).
  * Chaque étape peut échouer sans faire perdre la demande.
  */
-export async function finaliserDemande(created, { ip, controle = { ok: true }, transactionId = null } = {}) {
+export async function finaliserDemande(created, { ip, controle = { ok: true }, transactionId = null, comptoir = false } = {}) {
   const phone = created.phone
   const body = { phone, firstName: created.first_name, lastName: created.last_name, email: created.email }
   const birthDate = created.birth_date ? String(created.birth_date).slice(0, 10) : null
@@ -286,7 +287,7 @@ export async function finaliserDemande(created, { ip, controle = { ok: true }, t
     ligneRdv = await findById(created.id)
     if (ligneRdv) {
       await avecVerrouCreneau(creneauChoisi(ligneRdv), async (verrou) => {
-        issue = await decider(ligneRdv, controle)
+        issue = await decider(ligneRdv, controle, { sansPaiement: comptoir })
         // Verrou du créneau indisponible (très rare) : on ne prend aucun risque, le salon régularisera.
         if (!verrou && issue.confirmer) issue = { ...issue, confirmer: false, raison: 'creneau_indisponible' }
         rendezVous = await creerRendezVousDeDemande(ligneRdv, { repere: ['creneau_indisponible', 'demande_annulee'].includes(issue.raison) })
@@ -302,6 +303,9 @@ export async function finaliserDemande(created, { ip, controle = { ok: true }, t
           else if (resultat === 'deja') issue = { ...issue, confirmer: false, raison: 'deja' }
         }
       })
+      if (comptoir && issue.confirmer && rendezVous?.id) {
+        await logEvent(rendezVous.id, 'auto_confirm', 'Confirmé automatiquement (rendez-vous pris au comptoir, sans paiement d’avance).', null).catch(() => {})
+      }
       if (ligneRdv.payment_status === 'paid' && issue.raison !== 'deja') {
         await tracer(rendezVous?.id, ligneRdv, {
           confirme: issue.confirmer, raison: issue.raison, transactionId, motifControle: controle?.motif ?? null,
@@ -328,6 +332,29 @@ export async function finaliserDemande(created, { ip, controle = { ok: true }, t
   }
 
   sendMail(bookingRequestToSalon(created)).catch(() => {})
+
+  /*
+   * Comptoir : rendez-vous confirmé automatiquement → la cliente (souvent à distance, parfois sans e-mail) reçoit le MÊME
+   * récapitulatif que sur le site, par e-mail, WhatsApp ET SMS. S'il n'est pas confirmé (créneau pris), simple accusé « demande reçue ».
+   */
+  if (comptoir && issue.confirmer && rendezVous?.id) {
+    Promise.all([findById(created.id), findAppointment(rendezVous.id)])
+      .then(([maj, frais]) =>
+        maj && frais
+          ? annoncerConfirmation({
+              maj,
+              frais,
+              rdvId: rendezVous.id,
+              date: issue.creneau.date,
+              time: issue.creneau.time,
+              price: frais.price,
+              user: null,
+            })
+          : null,
+      )
+      .catch(() => {})
+    return
+  }
 
   // Accusé de réception à la cliente (WhatsApp par défaut) — sans attendre, sans jamais bloquer.
   findById(created.id)
@@ -365,11 +392,11 @@ export async function finaliserDemande(created, { ip, controle = { ok: true }, t
 // ══════════════ Public ══════════════
 export const publicRouter = Router()
 
-publicRouter.post(
-  '/booking-requests',
-  bookingLimiter,
-  validate({ body: createBody }),
-  async (request, response) => {
+/**
+ * Cœur du parcours de réservation, commun au site public et au comptoir du salon (même validations, mêmes quotas, même
+ * calcul du tarif indicatif, même rendez-vous « en attente »). Seule différence au comptoir : AUCUN paiement d'avance.
+ */
+async function traiterDemande(request, response, { comptoir = false } = {}) {
     const body = request.body
     const catalogue = await getCatalogue()
 
@@ -512,7 +539,8 @@ publicRouter.post(
       }
     }
 
-    const paiement = await paiementRequis()
+    // Comptoir : la cliente est au salon, aucun paiement d'avance.
+    const paiement = comptoir ? { requis: false, montant: 0, disponible: true } : await paiementRequis()
     const input = { ...body, birthDate: body.birthDate || null }
 
     let created = null
@@ -541,7 +569,7 @@ publicRouter.post(
           email: body.email,
           birthDate: input.birthDate,
           note: body.note?.trim() || null,
-          ip: request.ip?.slice(0, 45) ?? null,
+          ip: comptoir ? null : request.ip?.slice(0, 45) ?? null,
           customerKind: body.customerKind ?? null,
           consultationMode: k?.mode ?? null,
           hasLocks: k?.hasLocks ?? null,
@@ -568,6 +596,7 @@ publicRouter.post(
             avecPrestation,
             serviceDate: body.serviceDate ?? null,
             serviceTime: body.serviceTime || null,
+            comptoir,
           }),
         })
       } catch (error) {
@@ -580,7 +609,7 @@ publicRouter.post(
      * Une demande qui attend son paiement reste invisible du salon : rien n'est créé (fiche, rendez-vous,
      * messages, e-mail) tant que Jèko n'a pas confirmé. Le paiement confirmé appelle `finaliserDemande`.
      */
-    if (!paiement.requis) await finaliserDemande(created, { ip: request.ip })
+    if (!paiement.requis) await finaliserDemande(created, { ip: comptoir ? null : request.ip, comptoir })
     else if (!paiement.disponible) {
       // Paiement en ligne indisponible : la demande n'est PAS confirmée, mais le salon est prévenu pour recontacter la cliente.
       sendMail({
@@ -590,13 +619,25 @@ publicRouter.post(
       }).catch(() => {})
     }
 
+    if (comptoir) {
+      const ligne = await findById(created.id)
+      return sendCreated(response, {
+        ...serializePublic(ligne ?? created),
+        appointmentId: ligne?.appointment_id ?? null,
+        message: ligne?.status === 'confirmed' ? 'Rendez-vous enregistré et confirmé.' : 'Rendez-vous enregistré : créneau à confirmer.',
+      })
+    }
+
     return sendCreated(response, {
       ...serializePublic(created),
       message: paiement.requis
         ? `Votre demande est enregistrée : réglez la consultation (${paiement.montant} FCFA) pour la valider.`
         : 'Votre demande est bien reçue. Le salon vous confirme le jour et l’heure par téléphone ou WhatsApp.',
     })
-  },
+}
+
+publicRouter.post('/booking-requests', bookingLimiter, validate({ body: createBody }), (request, response) =>
+  traiterDemande(request, response),
 )
 
 publicRouter.get(
@@ -625,6 +666,14 @@ const listQuery = z.object({
   page: z.coerce.number().int().positive().optional(),
   limit: z.coerce.number().int().positive().max(100).optional(),
 })
+
+/**
+ * POST /admin/booking-requests/comptoir — rendez-vous pris au salon : EXACTEMENT le même parcours que le site public
+ * (besoin, type, méthode, volume, longueur, délai, état, consultation, coiffure, jour et créneau, quotas), sans paiement d'avance.
+ */
+adminRouter.post('/booking-requests/comptoir', validate({ body: createBody }), (request, response) =>
+  traiterDemande(request, response, { comptoir: true }),
+)
 
 adminRouter.get('/booking-requests', validate({ query: listQuery }), async (request, response) => {
   const filters = getQuery(request)

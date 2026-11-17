@@ -94,6 +94,14 @@ const serializePayment = (row) => ({
   createdAt: row.created_at,
 })
 
+const serializeExtra = (row) => ({
+  id: row.id,
+  label: row.label,
+  price: num(row.price),
+  createdByName: row.created_by_name,
+  createdAt: row.created_at,
+})
+
 const serializeEvent = (row) => ({
   id: row.id,
   kind: row.kind,
@@ -116,7 +124,8 @@ const serializeDocument = (row) => ({
  * Fiche complète d'un rendez-vous : la cliente, le créneau, la prestation,
  * le traitement, l'argent, le journal, les documents et l'avis éventuel.
  */
-export function serializeOperation(row, { payments = [], events = [], documents = [], review = null, agents = [] } = {}) {
+export function serializeOperation(row, { payments = [], events = [], documents = [], review = null, agents = [], extras = [] } = {}) {
+  const extrasTotal = extras.reduce((sum, extra) => sum + num(extra.price), 0)
   return {
     id: row.id,
     reference: row.reference,
@@ -125,6 +134,9 @@ export function serializeOperation(row, { payments = [], events = [], documents 
     time: toShortTime(row.appointment_time),
     durationMinutes: Number(row.duration_minutes),
     price: num(row.price),
+    /** Prix de la prestation principale (hors prestations supplémentaires, comme le shampoing). `price` reste le total. */
+    basePrice: Math.max(num(row.price) - extrasTotal, 0),
+    extras: extras.map(serializeExtra),
     currency: row.currency,
     source: row.source,
     note: row.note,
@@ -223,6 +235,41 @@ export async function listEvents(appointmentId) {
   )
 }
 
+/** Prestations supplémentaires (shampoing…). Table absente (migration 021 pas encore appliquée) : liste vide. */
+export async function listExtras(appointmentId) {
+  try {
+    return await query('SELECT * FROM appointment_extras WHERE appointment_id = ? ORDER BY id', [appointmentId])
+  } catch (error) {
+    if (error.code === 'ER_NO_SUCH_TABLE') return []
+    throw error
+  }
+}
+
+/** Ajoute une prestation et l'ajoute au total à payer (`appointments.price`). */
+export async function addExtra(appointmentId, { label, price }, actor) {
+  try {
+    const result = await execute(
+      'INSERT INTO appointment_extras (appointment_id, label, price, created_by, created_by_name) VALUES (?, ?, ?, ?, ?)',
+      [appointmentId, label, price, actor?.id ?? null, actor?.name ?? 'Système'],
+    )
+    await execute('UPDATE appointments SET price = price + ? WHERE id = ?', [price, appointmentId])
+    return result.insertId
+  } catch (error) {
+    if (error.code === 'ER_NO_SUCH_TABLE') {
+      throw new Error('La migration 021 (prestations supplémentaires) n’est pas encore appliquée.')
+    }
+    throw error
+  }
+}
+
+export async function deleteExtra(appointmentId, extraId) {
+  const extra = await queryOne('SELECT price FROM appointment_extras WHERE id = ? AND appointment_id = ? LIMIT 1', [extraId, appointmentId])
+  if (!extra) return false
+  await execute('DELETE FROM appointment_extras WHERE id = ? AND appointment_id = ?', [extraId, appointmentId])
+  await execute('UPDATE appointments SET price = GREATEST(price - ?, 0) WHERE id = ?', [extra.price, appointmentId])
+  return true
+}
+
 /** Agents de la prestation, dans l'ordre. Table absente (migration 020 pas encore appliquée) : liste vide, `staff_id` fait foi. */
 export async function listAgents(appointmentId) {
   try {
@@ -279,14 +326,15 @@ export async function findReview(appointmentId) {
 export async function getOperation(id) {
   const row = await findRow(id)
   if (!row) return null
-  const [payments, events, documents, review, agents] = await Promise.all([
+  const [payments, events, documents, review, agents, extras] = await Promise.all([
     listPayments(id),
     listEvents(id),
     listDocuments(id),
     findReview(id),
     listAgents(id),
+    listExtras(id),
   ])
-  return serializeOperation(row, { payments, events, documents, review, agents })
+  return serializeOperation(row, { payments, events, documents, review, agents, extras })
 }
 
 /* ────────────────────────────── Écriture ────────────────────────────────── */

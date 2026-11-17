@@ -1,5 +1,5 @@
 import { execute, query, queryOne } from '../../config/database.js'
-import { computeTotals, listPayments } from '../operations/model.js'
+import { computeTotals, listExtras, listPayments } from '../operations/model.js'
 import { getSettings } from '../salon/model.js'
 import { listAgents } from '../operations/model.js'
 
@@ -37,7 +37,8 @@ export async function nextNumber(kind) {
 
 /** Tout ce dont le PDF a besoin, figé à l'instant de l'émission. */
 export async function buildSnapshot(row, kind) {
-  const [payments, settings, agents] = await Promise.all([listPayments(row.id), getSettings(), listAgents(row.id)])
+  const [payments, settings, agents, extras] = await Promise.all([listPayments(row.id), getSettings(), listAgents(row.id), listExtras(row.id)])
+  const extrasTotal = extras.reduce((sum, extra) => sum + Number(extra.price), 0)
   const totals = computeTotals(row, payments)
 
   return {
@@ -59,6 +60,11 @@ export async function buildSnapshot(row, kind) {
       durationMinutes: Number(row.duration_minutes),
       serviceName: row.service_name,
       hairstyle: row.hairstyle_title ?? null,
+      /** Chaque prestation / service du rendez-vous (nom + coiffure), pour la colonne « Description » du reçu. */
+      prestations: [
+        { name: row.service_name, detail: row.hairstyle_title ?? null, price: extras.length ? Math.max(Number(row.price) - extrasTotal, 0) : null },
+        ...extras.map((extra) => ({ name: extra.label, detail: null, price: Number(extra.price), extra: true })),
+      ].filter((item) => item.name),
       note: row.note ?? null,
       status: row.status,
     },

@@ -19,6 +19,9 @@ import {
   setAssignment,
   setDiscount,
   setPrice,
+  addExtra,
+  deleteExtra,
+  listExtras,
 } from './model.js'
 import { execute, query, queryOne } from '../../config/database.js'
 import { ApiError } from '../../lib/ApiError.js'
@@ -490,7 +493,9 @@ adminRouter.put(
     if (!OPERATION_STATUSES.includes(row.status)) {
       throw ApiError.conflict('Ce rendez-vous n’est pas au stade du traitement.')
     }
-    const price = Math.round(Number(request.body.price) * 100) / 100
+    /* Le prix saisi est celui de la prestation principale ; les prestations supplémentaires (shampoing…) s'y ajoutent. */
+    const extrasTotal = (await listExtras(row.id)).reduce((sum, extra) => sum + Number(extra.price), 0)
+    const price = Math.round((Number(request.body.price) + extrasTotal) * 100) / 100
     const payments = await listPayments(row.id)
     const paid = payments.reduce((sum, payment) => sum + Number(payment.amount), 0)
     const discount = Math.min(Math.max(Number(row.discount_amount) || 0, 0), price)
@@ -505,6 +510,60 @@ adminRouter.put(
     }
     await setPrice(row.id, price)
     await logEvent(row.id, 'price', `Prix de la prestation fixé à ${formatMontant(price, row.currency)}`, request.user)
+    return sendData(response, await getOperation(row.id))
+  },
+)
+
+const extraBody = z.object({
+  label: z.string().trim().min(2, 'Indiquez le nom de la prestation.').max(160),
+  price: z.coerce.number().positive('Le prix doit être supérieur à zéro.').max(10_000_000, 'Prix trop élevé.'),
+})
+
+/**
+ * POST /admin/appointments/:id/extras — ajoute une prestation (ex. « Shampoing ») avec son propre prix.
+ * Elle s'ajoute au total à payer et apparaît séparément sur le reçu.
+ */
+adminRouter.post(
+  '/appointments/:id/extras',
+  validate({ params: idParam, body: extraBody }),
+  async (request, response) => {
+    const row = await loadRow(request.params.id)
+    if (!OPERATION_STATUSES.includes(row.status)) {
+      throw ApiError.conflict('Ce rendez-vous n’est pas au stade du traitement.')
+    }
+    if (!row.arrived_at) throw ApiError.conflict('Enregistrez d’abord la présence de la cliente.')
+    const price = Math.round(Number(request.body.price) * 100) / 100
+    try {
+      await addExtra(row.id, { label: request.body.label, price }, request.user)
+    } catch (error) {
+      if (/migration 021/.test(error.message)) throw ApiError.conflict(error.message)
+      throw error
+    }
+    await logEvent(row.id, 'extra', `Prestation ajoutée : ${request.body.label} (${formatMontant(price, row.currency)})`, request.user)
+    return sendData(response, await getOperation(row.id))
+  },
+)
+
+/** DELETE …/extras/:extraId — retire une prestation ajoutée par erreur (refusé si le total passerait sous l'encaissé). */
+adminRouter.delete(
+  '/appointments/:id/extras/:extraId',
+  validate({ params: z.object({ id: z.coerce.number().int().positive(), extraId: z.coerce.number().int().positive() }) }),
+  async (request, response) => {
+    const row = await loadRow(request.params.id)
+    const extra = (await listExtras(row.id)).find((item) => String(item.id) === String(request.params.extraId))
+    if (!extra) throw ApiError.notFound('Cette prestation n’existe pas.')
+    const payments = await listPayments(row.id)
+    const paid = payments.reduce((sum, payment) => sum + Number(payment.amount), 0)
+    const total = Number(row.price) - Number(extra.price)
+    const discount = Math.min(Math.max(Number(row.discount_amount) || 0, 0), total)
+    if (total - discount < paid) {
+      throw ApiError.unprocessable('Cette prestation est déjà couverte par des versements : annulez d’abord le versement correspondant.')
+    }
+    if ((Number(row.discount_amount) || 0) > total) {
+      await setDiscount(row.id, { amount: Math.max(total, 0), reason: row.discount_reason ?? null, note: row.discount_note ?? null }, request.user)
+    }
+    await deleteExtra(row.id, extra.id)
+    await logEvent(row.id, 'extra', `Prestation retirée : ${extra.label}`, request.user)
     return sendData(response, await getOperation(row.id))
   },
 )

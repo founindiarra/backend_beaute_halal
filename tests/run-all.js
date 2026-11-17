@@ -23,7 +23,7 @@ const lancer = (nom, fichier, env = {}) => {
   resultats.push({ nom, ok: r.status === 0 })
 }
 
-for (const [nom, fichier] of [['api', 'api.test.js'], ['v3', 'v3.test.js'], ['coiffures', 'coiffures.test.js'], ['demandes', 'demandes-rdv.test.js'], ['permissions', 'permissions.test.js'], ['créneaux et places', 'creneaux-capacite.test.js'], ['niveaux de réparation', 'reparation-niveaux.test.js'], ['textes et règles du site', 'textes-site.test.js'], ['nouveautés (avis, agents, rapport, listes)', 'nouveautes.test.js'], ['places par jour, e-mail facultatif, consultation', 'quotas.test.js']]) {
+for (const [nom, fichier] of [['api', 'api.test.js'], ['v3', 'v3.test.js'], ['coiffures', 'coiffures.test.js'], ['demandes', 'demandes-rdv.test.js'], ['permissions', 'permissions.test.js'], ['créneaux et places', 'creneaux-capacite.test.js'], ['niveaux de réparation', 'reparation-niveaux.test.js'], ['textes et règles du site', 'textes-site.test.js'], ['nouveautés (avis, agents, rapport, listes)', 'nouveautes.test.js'], ['places par jour, e-mail facultatif, consultation', 'quotas.test.js'], ['prestations supplémentaires (shampoing)', 'prestations-extras.test.js']]) {
   lancer(nom, fichier, { TEST_API_URL: api.base })
 }
 api.stop()

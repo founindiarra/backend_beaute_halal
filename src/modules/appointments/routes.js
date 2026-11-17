@@ -262,6 +262,8 @@ adminRouter.post(
   validate({
     body: z.object({
       serviceId: z.coerce.number().int().positive(),
+      /** Prix convenu au comptoir ; à défaut, le prix du catalogue de la prestation. */
+      price: z.coerce.number().positive().max(10_000_000).optional(),
       date: z.iso.date(),
       time: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/, 'Format attendu : HH:MM'),
       firstName: z.string().trim().min(2).max(80),
@@ -329,7 +331,7 @@ adminRouter.post(
           date: body.date,
           time: slot.ok ? slot.time : heure,
           durationMinutes: service.durationMinutes,
-          price: service.price,
+          price: body.price ?? service.price,
           currency: service.currency,
           firstName: body.firstName,
           lastName: body.lastName,

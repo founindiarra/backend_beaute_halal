@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { z } from 'zod'
 
-import { defaultCatalogue, getCatalogue, saveCatalogue } from './catalogue.js'
+import { defaultCatalogue, estimate, getCatalogue, saveCatalogue } from './catalogue.js'
 import { execute, query } from '../../config/database.js'
 import { ApiError } from '../../lib/ApiError.js'
 import { absoluteUrl } from '../../lib/url.js'
@@ -181,6 +181,23 @@ const canonique = (valeur) => {
 const different = (a, b) => JSON.stringify(canonique(a ?? null)) !== JSON.stringify(canonique(b ?? null))
 
 adminRouter.get('/tarifs', async (_request, response) => sendData(response, await getCatalogue()))
+
+/** Tarif indicatif d'un resserrage / d'une réparation (même calcul que le site) : sert à l'aperçu du rendez-vous pris au comptoir. */
+adminRouter.post(
+  '/estimate-tarif',
+  requireAnyPermission('appointments'),
+  validate({
+    body: z.object({
+      type: z.string().trim().min(1).max(40),
+      volume: z.string().trim().max(8).optional().default(''),
+      formule: z.string().trim().max(20).optional().default('complet'),
+      delai: z.string().trim().max(30).optional().default(''),
+      etat: z.string().trim().max(30).optional().default(''),
+      reparation: z.enum(['partielle', 'globale']).optional(),
+    }),
+  }),
+  async (request, response) => sendData(response, estimate(await getCatalogue(), request.body)),
+)
 
 adminRouter.put('/tarifs', validate({ body: catalogueBody }), async (request, response) => {
   const droits = request.user?.permissions ?? []

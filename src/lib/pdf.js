@@ -276,33 +276,55 @@ function tableauVersements(doc, snapshot, y) {
 
   y = intitule(doc, 'Versements enregistrés', MARGE, y, UTILE)
 
+  /* « Description » = le nom de chaque prestation du rendez-vous (toutes, quel qu'en soit le nombre), puis les infos habituelles. */
+  const lignesDescription = (snapshot.appointment?.prestations?.length
+    ? snapshot.appointment.prestations
+    : [{ name: snapshot.appointment?.serviceName, detail: snapshot.appointment?.hairstyle }]
+  )
+    .filter((item) => item?.name)
+    .map((item) => (item.detail ? `${item.name} — ${item.detail}` : item.name))
+  const prestationsDescription = lignesDescription.length ? lignesDescription : ['—']
+  /* Chaque prestation est un bloc à part, séparé des autres par un espace (le shampoing n'est jamais collé au service). */
+  const ECART = 7
+
   const colonnes = [
-    { titre: 'Date', largeur: UTILE * 0.27 },
-    { titre: 'Enregistré par', largeur: UTILE * 0.26 },
-    { titre: 'Mode de paiement', largeur: UTILE * 0.25 },
-    { titre: 'Montant payé', largeur: UTILE * 0.22, align: 'right' },
+    { titre: 'Description', largeur: UTILE * 0.28 },
+    { titre: 'Date', largeur: UTILE * 0.21 },
+    { titre: 'Enregistré par', largeur: UTILE * 0.17 },
+    { titre: 'Mode de paiement', largeur: UTILE * 0.19 },
+    { titre: 'Montant payé', largeur: UTILE * 0.15, align: 'right' },
   ]
+  const PAD = 14
 
   doc.roundedRect(MARGE, y, UTILE, 26, 5).fill(BRUN)
   let x = MARGE + 12
   colonnes.forEach((colonne) => {
     doc
       .font('Jost-SemiBold')
-      .fontSize(7.5)
+      .fontSize(7)
       .fillColor(CREME)
       .text(colonne.titre.toUpperCase(), x, y + 9, {
-        width: colonne.largeur - 24,
+        width: colonne.largeur - PAD,
         align: colonne.align,
-        characterSpacing: 0.8,
+        characterSpacing: 0.3,
         lineBreak: false,
       })
     x += colonne.largeur
   })
   y += 32
 
+  /* La description est identique sur chaque ligne ; sa hauteur (plusieurs prestations) fixe celle de la ligne. */
+  doc.font('Jost').fontSize(8.8)
+  const hauteurDescription = prestationsDescription.reduce(
+    (somme, texte, i) => somme + doc.heightOfString(texte, { width: colonnes[0].largeur - PAD }) + (i ? ECART : 0),
+    0,
+  )
+  const hauteurLigne = Math.max(26, hauteurDescription + 12)
+
   paiements.forEach((versement, index) => {
-    if (index % 2 === 0) doc.roundedRect(MARGE, y - 4, UTILE, 26, 4).fill(IVOIRE)
+    if (index % 2 === 0) doc.roundedRect(MARGE, y - 4, UTILE, hauteurLigne, 4).fill(IVOIRE)
     const valeurs = [
+      null,
       formatDateTime(versement.createdAt),
       versement.recordedBy || '—',
       methodLabel(versement.method),
@@ -310,19 +332,28 @@ function tableauVersements(doc, snapshot, y) {
     ]
     x = MARGE + 12
     colonnes.forEach((colonne, i) => {
+      if (i === 0) {
+        let dy = y + 4
+        prestationsDescription.forEach((texte) => {
+          doc.font('Jost').fontSize(8.8).fillColor(ENCRE).text(texte, x, dy, { width: colonne.largeur - PAD })
+          dy += doc.heightOfString(texte, { width: colonne.largeur - PAD }) + ECART
+        })
+        x += colonne.largeur
+        return
+      }
       doc
-        .font(i === 3 ? 'Jost-SemiBold' : 'Jost')
+        .font(i === 4 ? 'Jost-SemiBold' : 'Jost')
         .fontSize(8.8)
         .fillColor(ENCRE)
         .text(valeurs[i], x, y + 4, {
-          width: colonne.largeur - 24,
+          width: colonne.largeur - PAD,
           align: colonne.align,
           lineBreak: false,
           ellipsis: true,
         })
       x += colonne.largeur
     })
-    y += 26
+    y += hauteurLigne
   })
 
   return y + 6
@@ -432,6 +463,10 @@ export function renderDocument(snapshot, { numero }) {
     y += hauteurCartes + 28
 
     /* ── Prestation ── */
+    const supplements = (snapshot.appointment.prestations ?? []).filter((item) => item.extra)
+    const prixPrincipal = supplements.length
+      ? (snapshot.appointment.prestations.find((item) => !item.extra)?.price ?? snapshot.totals.total)
+      : snapshot.totals.total
     y = intitule(doc, 'Prestation', MARGE, y, UTILE)
     doc
       .font('Display-Bold')
@@ -466,12 +501,40 @@ export function renderDocument(snapshot, { numero }) {
       .font('Display-Bold')
       .fontSize(18)
       .fillColor(BRUN)
-      .text(formatMoney(snapshot.totals.total, snapshot.totals.currency), PAGE_L - MARGE - 160, y + 12, {
+      .text(formatMoney(prixPrincipal, snapshot.totals.currency), PAGE_L - MARGE - 160, y + 12, {
         width: 160,
         align: 'right',
         lineBreak: false,
       })
     y += 62
+
+    /* Prestations supplémentaires (shampoing…) : chacune sur sa ligne, avec son prix, puis le total. */
+    if (supplements.length) {
+      y = intitule(doc, 'Prestations supplémentaires', MARGE, y - 8, UTILE)
+      supplements.forEach((item) => {
+        doc.font('Jost').fontSize(10).fillColor(ENCRE).text(item.name, MARGE, y, { width: UTILE - 170, lineBreak: false, ellipsis: true })
+        doc
+          .font('Jost-SemiBold')
+          .fontSize(10)
+          .fillColor(ENCRE)
+          .text(formatMoney(item.price, snapshot.totals.currency), PAGE_L - MARGE - 160, y, { width: 160, align: 'right', lineBreak: false })
+        y += 18
+      })
+      doc
+        .moveTo(MARGE, y + 1)
+        .lineTo(PAGE_L - MARGE, y + 1)
+        .lineWidth(0.5)
+        .strokeColor(SABLE)
+        .stroke()
+      y += 8
+      doc.font('Jost-SemiBold').fontSize(10).fillColor(BRUN).text('Total des prestations', MARGE, y, { width: UTILE - 170, lineBreak: false })
+      doc
+        .font('Display-Bold')
+        .fontSize(13)
+        .fillColor(BRUN)
+        .text(formatMoney(snapshot.totals.total, snapshot.totals.currency), PAGE_L - MARGE - 160, y - 2, { width: 160, align: 'right', lineBreak: false })
+      y += 30
+    }
 
     /*
      * Deux personnes, deux lignes, jamais la même.
